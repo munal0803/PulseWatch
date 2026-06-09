@@ -216,3 +216,23 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Firebase / Google Cloud secrets
+serviceAccountKey.json
+*serviceAccount*.json
+*service_account*.json
+google-credentials.json
+firebase-adminsdk*.json
+
+# Node
+node_modules/
+.npm
+
+# Frontend env files (belt-and-suspenders)
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Backend env files (belt-and-suspenders)
+backend/.env
+backend/.env.local
