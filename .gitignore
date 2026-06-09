@@ -217,22 +217,13 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Firebase / Google Cloud secrets
+# Firebase service account key — share separately, never commit
 serviceAccountKey.json
-*serviceAccount*.json
-*service_account*.json
-google-credentials.json
-firebase-adminsdk*.json
 
 # Node
 node_modules/
 .npm
 
-# Frontend env files (belt-and-suspenders)
-frontend/.env
-frontend/.env.local
-frontend/.env.*.local
-
-# Backend env files (belt-and-suspenders)
-backend/.env
-backend/.env.local
+# Include project env files for demo/submission (Firebase client config is public)
+!frontend/.env
+!backend/.env
