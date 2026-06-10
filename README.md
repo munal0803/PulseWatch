@@ -155,6 +155,165 @@ PulseWatch/
 
 ---
 
+## Cloud Deployment
+
+The backend deploys to **Google Cloud Run** and the frontend to **Firebase Hosting** — both integrate directly with the Firebase project already powering this app.
+
+### Prerequisites
+
+```bash
+# Install Google Cloud CLI
+brew install google-cloud-sdk          # macOS
+# or visit https://cloud.google.com/sdk/docs/install for other platforms
+
+# Install Firebase CLI
+npm install -g firebase-tools
+
+# Log in to both CLIs
+gcloud auth login
+firebase login
+
+# Set your GCP project
+gcloud config set project assignment-385ae
+```
+
+---
+
+### Deploy the Backend — Google Cloud Run
+
+Cloud Run runs the existing Docker container — no changes to the backend code needed.
+
+**Step 1 — Store the service account key as a secret**
+
+Never bake credentials into a Docker image. Use Google Cloud Secret Manager instead:
+
+```bash
+gcloud secrets create firebase-service-account-key \
+  --data-file=serviceAccountKey.json
+```
+
+Grant Cloud Run permission to read the secret:
+
+```bash
+# Get your project number
+PROJECT_NUMBER=$(gcloud projects describe assignment-385ae --format="value(projectNumber)")
+
+gcloud secrets add-iam-policy-binding firebase-service-account-key \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+**Step 2 — Build and push the backend image**
+
+```bash
+cd backend
+
+gcloud builds submit \
+  --tag gcr.io/assignment-385ae/pulsewatch-backend \
+  --project assignment-385ae
+```
+
+**Step 3 — Deploy to Cloud Run**
+
+```bash
+gcloud run deploy pulsewatch-backend \
+  --image gcr.io/assignment-385ae/pulsewatch-backend \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --port 8000 \
+  --set-secrets="/app/serviceAccountKey.json=firebase-service-account-key:latest" \
+  --set-env-vars="GOOGLE_APPLICATION_CREDENTIALS=/app/serviceAccountKey.json" \
+  --project assignment-385ae
+```
+
+**Step 4 — Note the backend URL**
+
+The command prints a Service URL like:
+```
+https://pulsewatch-backend-<hash>-uc.a.run.app
+```
+
+Copy it — you need it for the frontend.
+
+---
+
+### Deploy the Frontend — Firebase Hosting
+
+**Step 1 — Update the backend API URL**
+
+In `frontend/.env`, set the backend URL to the Cloud Run service URL from above:
+
+```env
+VITE_API_BASE_URL=https://pulsewatch-backend-<hash>-uc.a.run.app
+```
+
+**Step 2 — Build the frontend**
+
+```bash
+cd frontend
+npm install
+npm run build
+# Output lands in frontend/dist/
+```
+
+**Step 3 — Initialise Firebase Hosting (first time only)**
+
+```bash
+cd frontend
+firebase init hosting
+```
+
+When prompted:
+- **Project:** select `assignment-385ae`
+- **Public directory:** `dist`
+- **Single-page app:** `Yes`
+- **Overwrite dist/index.html:** `No`
+
+This creates `frontend/firebase.json` and `.firebaserc`.
+
+**Step 4 — Deploy**
+
+```bash
+firebase deploy --only hosting
+```
+
+Firebase prints the live URL:
+```
+Hosting URL: https://assignment-385ae.web.app
+```
+
+---
+
+### Deployed URLs
+
+| Service | URL |
+|---------|-----|
+| Frontend | https://assignment-385ae.web.app |
+| Backend API | https://pulsewatch-backend-\<hash\>-uc.a.run.app |
+| API Docs | https://pulsewatch-backend-\<hash\>-uc.a.run.app/docs |
+| Health check | https://pulsewatch-backend-\<hash\>-uc.a.run.app/health |
+
+---
+
+### Redeploying After Changes
+
+**Backend change:**
+```bash
+cd backend
+gcloud builds submit --tag gcr.io/assignment-385ae/pulsewatch-backend
+gcloud run deploy pulsewatch-backend --image gcr.io/assignment-385ae/pulsewatch-backend --region us-central1
+```
+
+**Frontend change:**
+```bash
+cd frontend
+npm run build
+firebase deploy --only hosting
+```
+
+---
+
 ## Troubleshooting
 
 **Backend fails to start / Firestore errors**
@@ -176,3 +335,10 @@ docker-compose down
 docker system prune -f
 docker-compose up --build
 ```
+
+**Cloud Run — permission denied on Firestore**
+- Confirm the Secret Manager IAM binding was applied (see Deploy step 1)
+- Check Cloud Run logs: `gcloud run logs read --service pulsewatch-backend --region us-central1`
+
+**CORS errors after deploying frontend**
+- Update `allow_origins` in `backend/main.py` to include your Firebase Hosting URL, then redeploy the backend
